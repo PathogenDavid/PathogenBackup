@@ -6,6 +6,7 @@ I made this because I need to back up the save file from a pirate cart I purchas
 The cart in question has a game that normally uses EEPROM backup, but was patched to use SRAM so traditional backup programs are failing me.
 */
 #include <nds.h>
+#include <fat.h>
 #include <stdio.h>
 
 #define CONSOLE_WIDTH 32
@@ -24,9 +25,42 @@ static PrintConsole bottomScreen;
 
 static bool foundNonZero;
 
+static bool fatIsInitialized = false;
+static int numFilesSaved = 0;
+
 void setCursor(int x, int y)
 {
     iprintf("\x1b[%d;%dH", y, x);
+}
+
+void __fatal(const char* file, int line, const char* message)
+{
+    // Strip the directory from the file name:
+    const char* fileEnd = file + strlen(file);
+    while (*fileEnd != '/' && *fileEnd != '\\' && fileEnd != file) { fileEnd--; }
+    if (fileEnd != file) { fileEnd++; }
+    file = fileEnd;
+
+    // Print the error:
+    //setCursor(0, 0);
+    iprintf("\x1b[31;1mFATAL @ %s:%d\n%s\n", file, line, message);
+    while (true) { swiWaitForVBlank(); }
+}
+
+#define fatal(message) __fatal(__FILE__, __LINE__, message)
+
+bool fileExists(const char* file)
+{
+    if (!fatIsInitialized)
+    { fatal("Called fileExists without initializing filesystem."); }
+
+    FILE* f = fopen(file, "r");
+    if (f != NULL)
+    {
+        fclose(f);
+        return true;
+    }
+    return false;
 }
 
 void outputSaveData(uint offset)
@@ -78,8 +112,82 @@ void outputSaveData(uint offset)
         line++;
         iprintfl("OFFSET: 0x%X", offset);
         iprintfl("      : %d%%", (int)(100.f * (float)offset / (float)(GBA_SAVE_DATA_LENGTH - BYTES_PER_SCREEN)));
+        if (numFilesSaved > 0)
+        {
+            line++;
+            if (numFilesSaved > 1)
+            { iprintfl("%d SAVES DUMPED.", numFilesSaved); }
+            else
+            { iprintfl("SAVE DUMPED."); }
+        }
         #undef iprintfl
     }
+}
+
+void dumpSaveData()
+{
+    consoleSelect(&topScreen);
+    setCursor(0, 0);
+    iprintf("Dumping save data...\n");
+
+    // Initialize the file system driver:
+    if (!fatIsInitialized)
+    {
+        iprintf("Initializing file system...\n");
+        if (!fatInitDefault())
+        { fatal("Failed to initialize FAT driver!"); }
+        fatIsInitialized = true;
+    }
+
+    // Open the file:
+    iprintf("Opening file for writing...\n");
+    char fileName[1024];
+    sprintf(fileName, "%s.sav", GBA_HEADER.title);
+    FILE* f = NULL;
+    int fileNo = 0;
+    while (fileNo < 10)
+    {
+        if (!fileExists(fileName))
+        {
+            f = fopen(fileName, "wb");
+            break;
+        }
+        fileNo++;
+        sprintf(fileName, "%s_%d.sav", GBA_HEADER.title, fileNo);
+    }
+
+    if (f == NULL)
+    { fatal("Could not open file for writing!"); }
+
+    // Save the file:
+    iprintf("Saving...");
+
+    const uint chunkSize = 32;
+    if ((GBA_SAVE_DATA_LENGTH % chunkSize) != 0)
+    { fatal("BAD CHUNK SIZE"); }
+
+    u8 buffer[chunkSize];
+    for (uint i = 0; i < GBA_SAVE_DATA_LENGTH; i += chunkSize)
+    {
+        iprintf("Saving 0x%X/0x%X...\n", i, GBA_SAVE_DATA_LENGTH);
+        
+        // Copy chunk. (I don't use fwrite because the GBA cart SRAM bus is only 8 bits wide and I don't trust it to use byte-sized opcodes.)
+        for (uint j = 0; j < chunkSize; j++)
+        {
+            buffer[j] = SRAM[i + j];
+        }
+
+        // Write chunk to filesystem:
+        if (fwrite(buffer, sizeof(u8), chunkSize, f) != chunkSize)
+        {
+            fatal("Error while writing!");
+        }
+    }
+
+    if (fclose(f) != 0)
+    { fatal("Error closing file."); }
+
+    numFilesSaved++;
 }
 
 int main(void)
@@ -121,6 +229,7 @@ int main(void)
             scanKeys();
             uint32 input = keysDownRepeat();
 
+            // Slow scrolling
             if ((input & KEY_UP) && offset > 0)
             {
                 offset--;
@@ -132,7 +241,7 @@ int main(void)
                 break;
             }
 
-            //input = keysDown();
+            // Fast scrolling
             if ((input & KEY_X) && offset > 0)
             {
                 uint oldOffset = offset;
@@ -148,6 +257,14 @@ int main(void)
                 offset += ROWS_PER_SCREEN;
                 if (offset > MAX_OFFSET)
                 { offset = MAX_OFFSET; }
+                break;
+            }
+
+            // Save file dumping:
+            input = keysDown();
+            if (input & KEY_START)
+            {
+                dumpSaveData();
                 break;
             }
         }
