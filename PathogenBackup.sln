@@ -5,6 +5,8 @@ VisualStudioVersion = 12.0.31101.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PathogenBackup", "PathogenBackup\PathogenBackup.vcxproj", "{5125394E-87A9-44EC-8B89-645A81787B45}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SaveConverter", "SaveConverter\SaveConverter.csproj", "{F667B39B-0439-4EA7-A32A-C98F3332E6E9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|NDS = Debug|NDS
@@ -15,6 +17,10 @@ Global
 		{5125394E-87A9-44EC-8B89-645A81787B45}.Debug|NDS.Build.0 = Debug|Win32
 		{5125394E-87A9-44EC-8B89-645A81787B45}.Release|NDS.ActiveCfg = Release|Win32
 		{5125394E-87A9-44EC-8B89-645A81787B45}.Release|NDS.Build.0 = Release|Win32
+		{F667B39B-0439-4EA7-A32A-C98F3332E6E9}.Debug|NDS.ActiveCfg = Debug|Any CPU
+		{F667B39B-0439-4EA7-A32A-C98F3332E6E9}.Debug|NDS.Build.0 = Debug|Any CPU
+		{F667B39B-0439-4EA7-A32A-C98F3332E6E9}.Release|NDS.ActiveCfg = Release|Any CPU
+		{F667B39B-0439-4EA7-A32A-C98F3332E6E9}.Release|NDS.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
