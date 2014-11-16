@@ -1,8 +1,8 @@
 /*
-A utility for backing up GBA save files.
+A utility for backing up and viewing GBA SRAM save files.
 Super simple, pretty bare-minimum.
 
-I made this because I need to back up the save file from a pirate cart I purchased by mistake.
+I made this because I need to back up the save file from a counterfeit cart I purchased by mistake.
 The cart in question has a game that normally uses EEPROM backup, but was patched to use SRAM so traditional backup programs are failing me.
 */
 #include <nds.h>
@@ -20,19 +20,26 @@ The cart in question has a game that normally uses EEPROM backup, but was patche
 
 #define MAX_OFFSET ((GBA_SAVE_DATA_LENGTH - BYTES_PER_SCREEN) / BYTES_PER_ROW)
 
+//! Console handles for the top and bottom screens
 static PrintConsole topScreen;
 static PrintConsole bottomScreen;
 
-static bool foundNonZero;
+//! True when the save data contained anything that wasn't a 0 or 0xFF
+static bool saveIsntEmpty;
 
+//! True once the file system driver has been intiailzed.
 static bool fatIsInitialized = false;
+
+//! The number of times that the save data has been dumped to the file systen.
 static int numFilesSaved = 0;
 
+//! Sets the cursor to the given position on screen in the current console.
 void setCursor(int x, int y)
 {
     iprintf("\x1b[%d;%dH", y, x);
 }
 
+//! Prints an error to the screen and halts execution.
 void __fatal(const char* file, int line, const char* message)
 {
     // Strip the directory from the file name:
@@ -49,6 +56,7 @@ void __fatal(const char* file, int line, const char* message)
 
 #define fatal(message) __fatal(__FILE__, __LINE__, message)
 
+//! Returns true if the specified file already exists
 bool fileExists(const char* file)
 {
     if (!fatIsInitialized)
@@ -63,7 +71,10 @@ bool fileExists(const char* file)
     return false;
 }
 
-void outputSaveData(uint offset)
+//! Draws the screens
+//! The top screen will contain a hex view of the save file
+//! The bottom one will contain an ASCII view as well as some extra info.
+void drawScreens(uint offset)
 {
     consoleSelect(&topScreen);
     consoleClear();
@@ -75,16 +86,16 @@ void outputSaveData(uint offset)
     {
         for (int j = 0; j < BYTES_PER_ROW; j++, i++)
         {
-            u8 c = SRAM[offset + i];
+            u8 b = SRAM[offset + i];
 
-            // Hex view
+            // Draw byte on hex view
             consoleSelect(&topScreen);
             if (j != 0) { iprintf(" "); }
-            iprintf("%02X", c);
+            iprintf("%02X", b);
 
-            // ASCII view
+            // Draw byte on ASCII view
             consoleSelect(&bottomScreen);
-            iprintf("%c", (c < ' ' || c > '~') ? '.' : c);
+            iprintf("%c", (b < ' ' || b > '~') ? '.' : b);
         }
         consoleSelect(&topScreen);
         iprintf("\n");
@@ -98,17 +109,22 @@ void outputSaveData(uint offset)
         int line = 0;
         #define iprintfl setCursor(BYTES_PER_ROW + 1, line++); iprintf
         iprintfl("Game: %s", GBA_HEADER.title);
-        iprintfl(foundNonZero ? "Found non-00/FF! :D" : "All 00 or FF :(");
+        iprintfl(saveIsntEmpty ? "Found non-00/FF! :D" : "All 00 or FF :(");
+
+        // Dump the EXMEMCNT register onto the screen:
+        // (See http://problemkaputt.de/gbatek.htm#dsmemorycontrolcartridgesandmainram for details.)
         iprintfl("EXMEMCNT=0x%X", REG_EXMEMCNT);
         line++;
-        iprintfl("SRAM WAIT: %d%d", REG_EXMEMCNT & BIT(0), REG_EXMEMCNT & BIT(1));
-        iprintfl("ROM1 WAIT: %d%d", REG_EXMEMCNT & BIT(2), REG_EXMEMCNT & BIT(3));
+        iprintfl("SRAM WAIT: %d%d", (REG_EXMEMCNT & BIT(0)) != 0, (REG_EXMEMCNT & BIT(1)) != 0);
+        iprintfl("ROM1 WAIT: %d%d", (REG_EXMEMCNT & BIT(2)) != 0, (REG_EXMEMCNT & BIT(3)) != 0);
         iprintfl("ROM2 WAIT: %d cycles", (REG_EXMEMCNT & BIT(4)) ? 4 : 6);
-        iprintfl("PHI PIN O: %d%d", REG_EXMEMCNT & BIT(5), REG_EXMEMCNT & BIT(6));
+        iprintfl("PHI PIN O: %d%d", (REG_EXMEMCNT & BIT(5)) != 0, (REG_EXMEMCNT & BIT(6)) != 0);
         iprintfl("SLOT2PERM: %s", (REG_EXMEMCNT & BIT(7)) ? "ARM7" : "ARM9");
         iprintfl("SLOT1PERM: %s", (REG_EXMEMCNT & BIT(11)) ? "ARM7" : "ARM9");
         iprintfl("MAIN MODE: %s", (REG_EXMEMCNT & BIT(14)) ? "SYNC" : "ASYNC");
         iprintfl("APRIORITY: %s", (REG_EXMEMCNT & BIT(15)) ? "ARM7" : "ARM9");
+
+        // Display the offset in the save memory:
         line++;
         iprintfl("OFFSET: 0x%X", offset);
         iprintfl("      : %d%%", (int)(100.f * (float)offset / (float)(GBA_SAVE_DATA_LENGTH - BYTES_PER_SCREEN)));
@@ -124,7 +140,10 @@ void outputSaveData(uint offset)
     }
 }
 
-void dumpSaveData()
+//! Dumps the entire save region into a file named with the title in the game's header.
+//! NOTE: This function makes no attempt to detect the actualy size of the save file.
+//! This isn't probably an issue, but know that the save will be larger than what you might expect.
+void dumpSaveDataToFile()
 {
     consoleSelect(&topScreen);
     setCursor(0, 0);
@@ -171,17 +190,16 @@ void dumpSaveData()
     {
         iprintf("Saving 0x%X/0x%X...\n", i, GBA_SAVE_DATA_LENGTH);
         
-        // Copy chunk. (I don't use fwrite because the GBA cart SRAM bus is only 8 bits wide and I don't trust it to use byte-sized opcodes.)
+        // Copy a chunk into RAM:
+        // (fwrite is not used because the SRAM bus is only 8 bits wide, and fwrite probably uses larger sized load instructions.)
         for (uint j = 0; j < chunkSize; j++)
         {
             buffer[j] = SRAM[i + j];
         }
 
-        // Write chunk to filesystem:
+        // Write the chunk to filesystem:
         if (fwrite(buffer, sizeof(u8), chunkSize, f) != chunkSize)
-        {
-            fatal("Error while writing!");
-        }
+        { fatal("Error while writing!"); }
     }
 
     if (fclose(f) != 0)
@@ -190,6 +208,7 @@ void dumpSaveData()
     numFilesSaved++;
 }
 
+//! Program entrypoint
 int main(void)
 {
     // Initialize consoles
@@ -206,13 +225,13 @@ int main(void)
     sysSetCartOwner(true);
 
     // Check the entire save region for non-zero
-    foundNonZero = false;
+    saveIsntEmpty = false;
     for (int i = 0; i < GBA_SAVE_DATA_LENGTH; i++)
     {
         u8 b = SRAM[i];
         if (b != 0x00 && b != 0xFF)
         {
-            foundNonZero = true;
+            saveIsntEmpty = true;
             break;
         }
     }
@@ -221,11 +240,13 @@ int main(void)
     uint offset = 0;
     while(true)
     {
-        outputSaveData(offset * BYTES_PER_ROW);
+        drawScreens(offset * BYTES_PER_ROW);
+
         while (true)
         {
             swiWaitForVBlank();
 
+            // Handle input
             scanKeys();
             uint32 input = keysDownRepeat();
 
@@ -264,7 +285,7 @@ int main(void)
             input = keysDown();
             if (input & KEY_START)
             {
-                dumpSaveData();
+                dumpSaveDataToFile();
                 break;
             }
         }
