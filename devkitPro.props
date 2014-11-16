@@ -11,8 +11,7 @@
     <NMakeReBuildCommandLine>$(DEVKITPRO-WIN)msys\bin\make clean
 $(DEVKITPRO-WIN)\msys\bin\make</NMakeReBuildCommandLine>
     <NMakeCleanCommandLine>$(DEVKITPRO-WIN)msys\bin\make clean</NMakeCleanCommandLine>
-    <NMakePreprocessorDefinitions>
-    </NMakePreprocessorDefinitions>
+    <NMakePreprocessorDefinitions>_HAVE_STDC</NMakePreprocessorDefinitions>
     <NMakeIncludeSearchPath>$(DEVKITARM-WIN)arm-none-eabi\include;$(DEVKITARM-WIN)lib\gcc\arm-none-eabi\4.8.2\include</NMakeIncludeSearchPath>
     <OutDir>$(ProjectDir)</OutDir>
     <IntDir>$(ProjectDir)build</IntDir>

@@ -2,8 +2,11 @@
 #ifndef __INTELLIFIX_H__
 #define __INTELLIFIX_H__
 
+#ifndef __cplusplus
 #define true 1
 #define false 0
+#endif
+
 #define __extension__
 #define __attribute__(x)
 
