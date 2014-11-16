@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros">
+    <DEVKITPRO-WIN>$(DEVKITPRO.Substring(1,1).ToUpper()):\$(DEVKITPRO.Replace("/", "\").Substring(3))\</DEVKITPRO-WIN>
+    <DEVKITARM-WIN>$(DEVKITARM.Substring(1,1).ToUpper()):\$(DEVKITARM.Replace("/", "\").Substring(3))\</DEVKITARM-WIN>
+    <DEVKITPPC-WIN>$(DEVKITPPC.Substring(1,1).ToUpper()):\$(DEVKITPPC.Replace("/", "\").Substring(3))\</DEVKITPPC-WIN>
+  </PropertyGroup>
+  <PropertyGroup>
+    <NMakeBuildCommandLine>$(DEVKITPRO-WIN)msys\bin\make</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>$(DEVKITPRO-WIN)msys\bin\make clean
+$(DEVKITPRO-WIN)\msys\bin\make</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>$(DEVKITPRO-WIN)msys\bin\make clean</NMakeCleanCommandLine>
+    <NMakePreprocessorDefinitions>
+    </NMakePreprocessorDefinitions>
+    <NMakeIncludeSearchPath>$(DEVKITARM-WIN)arm-none-eabi\include;$(DEVKITARM-WIN)lib\gcc\arm-none-eabi\4.8.2\include</NMakeIncludeSearchPath>
+    <OutDir>$(ProjectDir)</OutDir>
+    <IntDir>$(ProjectDir)build</IntDir>
+    <NMakeOutput>$(ProjectName).nds</NMakeOutput>
+    <NMakeForcedIncludes>$(SolutionDir)\intellifix.h;$(NMakeForcedIncludes)</NMakeForcedIncludes>
+  </PropertyGroup>
+  <ItemDefinitionGroup />
+  <ItemGroup>
+    <BuildMacro Include="DEVKITPRO-WIN">
+      <Value>$(DEVKITPRO-WIN)</Value>
+    </BuildMacro>
+    <BuildMacro Include="DEVKITARM-WIN">
+      <Value>$(DEVKITARM-WIN)</Value>
+    </BuildMacro>
+    <BuildMacro Include="DEVKITPPC-WIN">
+      <Value>$(DEVKITPPC-WIN)</Value>
+    </BuildMacro>
+  </ItemGroup>
+</Project>
